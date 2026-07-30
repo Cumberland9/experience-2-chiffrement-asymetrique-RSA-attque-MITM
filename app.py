@@ -9,94 +9,141 @@ onglet1, onglet2 = st.tabs(
     ["Expérience RSA (Essai A & B)", "Protection (Empreinte)"]
 )
 
+TAILLE_CLE = 2048  # 512 bits est trop faible (factorisable en pratique) ;
+                    # 2048 bits est la taille minimale recommandée aujourd'hui.
+
 # ----------------------------------------------------
 # ONGLET 1 : Essai A et Essai B
 # ----------------------------------------------------
 with onglet1:
-  st.header("Simulation des Essais A et B")
+    st.header("Simulation des Essais A et B")
+    message = st.text_input("Message d'Alice à Bob", "Bonjour Bob !")
 
-  message = st.text_input("Message d'Alice à Bob", "Bonjour Bob !")
+    mode = st.radio(
+        "Choisir le scénario :", ["Essai A (Normal)", "Essai B (MITM)"]
+    )
 
-  # Choix du mode (Normal ou Attaque)
-  mode = st.radio("Choisir le scénario :", ["Essai A (Normal)", "Essai B (MITM)"])
+    modification_active = False
+    if mode == "Essai B (MITM)":
+        modification_active = st.checkbox(
+            "Eve modifie le message avant de le retransmettre à Bob"
+        )
 
-  if st.button("Lancer la communication"):
-    # 1. Bob génère ses clés
-    pub_bob, priv_bob = rsa.newkeys(512)
+    if st.button("Lancer la communication"):
+        try:
+            # 1. Bob génère ses clés
+            pub_bob, priv_bob = rsa.newkeys(TAILLE_CLE)
 
-    if mode == "Essai A (Normal)":
-      # Alice chiffre directement avec la clé de Bob
-      message_chiffre = rsa.encrypt(message.encode(), pub_bob)
+            if mode == "Essai A (Normal)":
+                # Alice chiffre directement avec la clé de Bob
+                message_chiffre = rsa.encrypt(message.encode(), pub_bob)
+                # Bob déchiffre
+                message_dechiffre = rsa.decrypt(message_chiffre, priv_bob).decode()
 
-      # Bob déchiffre
-      message_dechiffre = rsa.decrypt(message_chiffre, priv_bob).decode()
+                st.success("Communication normale réussie !")
+                st.write("Message déchiffré par Bob :", message_dechiffre)
+                st.info(
+                    "Eve a vu la clé et le texte chiffré, mais ne peut pas "
+                    "lire sans la clé privée de Bob."
+                )
 
-      st.success("Communication normale réussie !")
-      st.write("Message déchiffré par Bob :", message_dechiffre)
-      st.info(
-          "Eve a vu la clé et le texte chiffré, mais ne peut pas lire sans la"
-          " clé privée de Bob."
-      )
+            else:
+                # Essai B : Attaque MITM
+                # 2-3. Eve intercepte la tentative d'envoi et génère sa propre paire de clés
+                pub_eve, priv_eve = rsa.newkeys(TAILLE_CLE)
 
-    else:
-      # Essai B : Attaque MITM
-      # Eve génère sa propre paire de clés
-      pub_eve, priv_eve = rsa.newkeys(512)
+                # 4-5. Alice chiffre avec la clé publique d'Eve, en croyant que c'est celle de Bob
+                message_chiffre_par_eve = rsa.encrypt(message.encode(), pub_eve)
 
-      # Alice chiffre avec la clé d'Eve (en croyant que c'est celle de Bob)
-      message_chiffre_par_eve = rsa.encrypt(message.encode(), pub_eve)
+                # 6-7. Eve intercepte et déchiffre avec sa clé privée
+                message_intercepte = rsa.decrypt(
+                    message_chiffre_par_eve, priv_eve
+                ).decode()
 
-      # Eve intercepte et déchiffre avec sa clé privée
-      message_intercepté = rsa.decrypt(message_chiffre_par_eve, priv_eve).decode()
+                # 8. Eve peut lire, et éventuellement modifier, le message
+                message_transmis = message_intercepte
+                if modification_active:
+                    message_transmis = message_intercepte + " [modifié par Eve]"
 
-      # Eve rechiffre avec la vraie clé de Bob
-      message_chiffre_pour_bob = rsa.encrypt(message_intercepté.encode(), pub_bob)
+                # 9. Eve rechiffre avec la véritable clé publique de Bob
+                message_chiffre_pour_bob = rsa.encrypt(
+                    message_transmis.encode(), pub_bob
+                )
 
-      # Bob reçoit et déchiffre
-      message_dechiffre_bob = rsa.decrypt(
-          message_chiffre_pour_bob, priv_bob
-      ).decode()
+                # 10. Bob reçoit et déchiffre
+                message_dechiffre_bob = rsa.decrypt(
+                    message_chiffre_pour_bob, priv_bob
+                ).decode()
 
-      st.warning("Attaque MITM réussie par Eve !")
-      st.write(
-          "1. Eve a intercepté et lu le message en clair :"
-          f" **{message_intercepté}**"
-      )
-      st.write("2. Bob a reçu :", message_dechiffre_bob)
-      st.error(
-          "Pourquoi ? Parce qu'Alice n'a pas vérifié l'identité de la clé"
-          " reçue."
-      )
+                st.warning("Attaque MITM réussie par Eve !")
+                st.write(
+                    "1. Eve a intercepté et lu le message en clair :"
+                    f" **{message_intercepte}**"
+                )
+                if modification_active:
+                    st.write(
+                        "2. Eve a modifié le message avant de le retransmettre :"
+                        f" **{message_transmis}**"
+                    )
+                st.write("3. Bob a reçu :", message_dechiffre_bob)
+                st.error(
+                    "Pourquoi ? Parce qu'Alice n'a pas vérifié l'identité de "
+                    "la clé reçue. Eve n'a pas cassé RSA : elle a simplement "
+                    "substitué sa propre clé publique à celle de Bob."
+                )
+
+        except OverflowError:
+            st.error(
+                "Le message est trop long pour être chiffré directement "
+                "avec cette taille de clé RSA. Essayez un message plus court."
+            )
 
 # ----------------------------------------------------
 # ONGLET 2 : Protection contre l'attaque MITM
 # ----------------------------------------------------
 with onglet2:
-  st.header("Protection : Vérification de l'empreinte")
-  st.write(
-      "Pour contrer l'attaque, on compare l'empreinte (hash) de la clé"
-      " publique avec un canal de confiance."
-  )
+    st.header("Protection : Vérification de l'empreinte")
+    st.write(
+        "Pour contrer l'attaque, Alice compare l'empreinte (hash) de la clé "
+        "publique reçue avec une empreinte de référence obtenue à l'avance "
+        "par un canal sécurisé (ex. rencontre en personne, certificat, "
+        "annuaire de confiance)."
+    )
 
-  if st.button("Tester la vérification"):
-    # Génération des clés
-    pub_bob, priv_bob = rsa.newkeys(512)
-    pub_eve, priv_eve = rsa.newkeys(512)  # Fausse clé d'Eve
+    # On génère UNE FOIS la vraie clé de Bob et son empreinte de référence,
+    # comme si Alice l'avait obtenue au préalable par un canal sécurisé.
+    if "pub_bob_ref" not in st.session_state:
+        st.session_state.pub_bob_ref, st.session_state.priv_bob_ref = rsa.newkeys(
+            TAILLE_CLE
+        )
+        st.session_state.empreinte_ref = hashlib.sha256(
+            str(st.session_state.pub_bob_ref).encode()
+        ).hexdigest()
 
-    # On calcule l'empreinte de la vraie clé de Bob
-    empreinte_officielle = hashlib.sha256(str(pub_bob).encode()).hexdigest()
+    scenario = st.radio(
+        "Quelle clé Alice reçoit-elle au moment de la communication ?",
+        ["La vraie clé de Bob", "Une clé substituée par Eve (MITM)"],
+    )
 
-    # Supposons qu'Eve essaie d'envoyer sa clé
-    empreinte_recue = hashlib.sha256(str(pub_eve).encode()).hexdigest()
+    if st.button("Tester la vérification"):
+        if scenario == "La vraie clé de Bob":
+            cle_recue = st.session_state.pub_bob_ref
+        else:
+            cle_recue, _ = rsa.newkeys(TAILLE_CLE)  # fausse clé d'Eve
 
-    st.text("Empreinte officielle (connue d'avance) : " + empreinte_officielle[:15] + "...")
-    st.text("Empreinte de la clé reçue : " + empreinte_recue[:15] + "...")
+        empreinte_recue = hashlib.sha256(str(cle_recue).encode()).hexdigest()
 
-    # Comparaison
-    if empreinte_recue == empreinte_officielle:
-      st.success("Les empreintes correspondent. Clé authentique !")
-    else:
-      st.error(
-          "ALERTE : Les empreintes ne correspondent pas ! Attaque MITM"
-          " détectée."
-      )
+        st.text(
+            "Empreinte officielle (connue d'avance) : "
+            + st.session_state.empreinte_ref[:15]
+            + "..."
+        )
+        st.text("Empreinte de la clé reçue : " + empreinte_recue[:15] + "...")
+
+        if empreinte_recue == st.session_state.empreinte_ref:
+            st.success("Les empreintes correspondent. Clé authentique !")
+        else:
+            st.error(
+                "ALERTE : Les empreintes ne correspondent pas ! Attaque "
+                "MITM détectée."
+            )
