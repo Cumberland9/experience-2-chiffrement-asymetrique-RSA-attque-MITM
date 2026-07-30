@@ -2,7 +2,7 @@ import hashlib
 import rsa
 import streamlit as st
 
-st.title("TP RSA - Attaque MITM et Protection")
+st.title("Attaque MITM et Protection")
 
 # Création des onglets pour séparer l'attaque et la protection
 onglet1, onglet2 = st.tabs(
