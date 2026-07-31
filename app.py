@@ -63,7 +63,7 @@ with onglet1:
                 # 8. Eve peut lire, et éventuellement modifier, le message
                 message_transmis = message_intercepte
                 if modification_active:
-                    message_transmis = message_intercepte + " [modifié par Eve]"
+                    message_transmis = message_intercepte + " [c'est Alice]"
 
                 # 9. Eve rechiffre avec la véritable clé publique de Bob
                 message_chiffre_pour_bob = rsa.encrypt(
