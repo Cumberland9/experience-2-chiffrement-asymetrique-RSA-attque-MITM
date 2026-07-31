@@ -106,8 +106,7 @@ with onglet2:
     st.write(
         "Pour contrer l'attaque, Alice compare l'empreinte (hash) de la clé "
         "publique reçue avec une empreinte de référence obtenue à l'avance "
-        "par un canal sécurisé (ex. rencontre en personne, certificat, "
-        "annuaire de confiance)."
+        "par un canal sécurisé."
     )
 
     # On génère UNE FOIS la vraie clé de Bob et son empreinte de référence,
