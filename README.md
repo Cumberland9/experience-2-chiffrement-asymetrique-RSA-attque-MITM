@@ -15,7 +15,6 @@ Cette application Streamlit simule une communication chiffrée avec RSA entre Al
 ## Technologies utilisées
 - Streamlit — interface utilisateur
 - rsa — implémentation du chiffrement RSA
-- hashlib — calcul de l'empreinte de la clé publique
 ## Installation
 ```bash
 pip install -r requirements.txt
